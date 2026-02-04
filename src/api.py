@@ -38,6 +38,11 @@ class UserPreferences(BaseModel):
     favorite_genres: Optional[List[str]] = None
     radius_miles: Optional[int] = 5
     max_transit_minutes: Optional[int] = 30
+    time_window_days: Optional[int] = 7
+    country: Optional[str] = None
+    search_lang: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class EventSearchRequest(BaseModel):
@@ -85,7 +90,7 @@ class VerifyEventResponse(BaseModel):
 # Initialize components (in production, use dependency injection)
 input_parser = InputParser()
 calendar_agent = CalendarAgent(participants=["alazar.genene@gmail.com"])
-discovery_agent = DiscoveryAgent(tavily_api_key="placeholder")
+discovery_agent = DiscoveryAgent()
 auditor = Auditor()
 edge_case_handler = EdgeCaseHandler()
 
@@ -308,4 +313,3 @@ async def transcribe_file(request: TranscribeFileRequest):
         return {"text": text}
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-

@@ -122,7 +122,10 @@ Create a `.env` file with required API keys:
 
 ```env
 OPENAI_API_KEY=your_openai_key
-TAVILY_API_KEY=your_tavily_key
+BRAVE_API_KEY=your_brave_key
+DISCOVERY_PROVIDER=brave
+BRAVE_API_BASE_URL=https://api.search.brave.com/res/v1/web/search
+BRAVE_API_TIMEOUT_SECONDS=15
 NYLAS_API_KEY=your_nylas_key
 GOOGLE_MAPS_API_KEY=your_maps_key
 DEEPGRAM_API_KEY=your_deepgram_key

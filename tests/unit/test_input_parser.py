@@ -18,7 +18,7 @@ class TestInputParser:
         
         assert isinstance(result, ParsedIntent)
         assert result.query == "Find me live music events"
-        assert result.location == "San Francisco"
+        assert result.location is None
         assert result.genres == ["music", "arts", "tech"]
     
     def test_parse_with_user_preferences(self, parser):
@@ -60,3 +60,9 @@ class TestInputParser:
         result = parser.parse_input("Find music events")
         
         assert result.max_transit_minutes == 30
+
+    def test_parsed_intent_has_default_time_window(self, parser):
+        """Test that ParsedIntent has default time window."""
+        result = parser.parse_input("Find music events")
+        
+        assert result.time_window_days == 7

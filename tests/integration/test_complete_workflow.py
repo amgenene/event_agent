@@ -1,8 +1,11 @@
 """Integration tests for complete workflow."""
 
 import pytest
+from unittest.mock import patch
+
 from src.input_parser.parser import InputParser
 from src.discovery_agent.searcher import DiscoveryAgent
+from src.discovery_agent.providers.base import SearchProvider, SearchRequest, SearchResult
 from src.calendar_agent.scheduler import CalendarAgent
 from src.auditor.verifier import Auditor
 from src.resilience.edge_case_handler import EdgeCaseHandler
@@ -15,10 +18,23 @@ class TestCompleteWorkflow:
     @pytest.fixture
     def components(self):
         """Create all components."""
+        class StubProvider(SearchProvider):
+            def search(self, request: SearchRequest):
+                return [
+                    SearchResult(
+                        title="Test Event",
+                        url="https://example.com/event",
+                        description="Free community event"
+                    )
+                ]
+
+        with patch('src.calendar_agent.scheduler.CalendarService'):
+            calendar_agent = CalendarAgent(participants=["user@example.com"])
+
         return {
             "input_parser": InputParser(),
-            "calendar_agent": CalendarAgent(nylas_api_key="test"),
-            "discovery_agent": DiscoveryAgent(tavily_api_key="test"),
+            "calendar_agent": calendar_agent,
+            "discovery_agent": DiscoveryAgent(provider=StubProvider()),
             "auditor": Auditor(),
             "edge_case_handler": EdgeCaseHandler()
         }

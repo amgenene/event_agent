@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { startRecording, stopRecording } from "tauri-plugin-mic-recorder-api";
 
 interface Event {
   id: string;
@@ -36,6 +35,68 @@ export default function MinimalRecorder() {
   const [statusMessage, setStatusMessage] = useState<string>("Press ⌥E to start");
   const [transcript, setTranscript] = useState<string>("");
   const [events, setEvents] = useState<Event[]>([]);
+  const [savedLocation, setSavedLocation] = useState<{ location: string; country?: string } | null>(null);
+  const [locationPromptOpen, setLocationPromptOpen] = useState<boolean>(false);
+  const [locationInput, setLocationInput] = useState<string>("");
+  const [countryInput, setCountryInput] = useState<string>("");
+  const pendingSearchRef = useRef<boolean>(false);
+  const stateRef = useRef<RecorderState>("idle");
+  const locationPromptOpenRef = useRef<boolean>(false);
+  const noiseFloorRef = useRef<number>(0);
+  const lastAudioAtRef = useRef<number>(0);
+  const handlersRef = useRef<{
+    start: () => void;
+    stop: () => void;
+    cancel: () => void;
+    search: () => void;
+    saveLocation: () => void;
+  } | null>(null);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    locationPromptOpenRef.current = locationPromptOpen;
+  }, [locationPromptOpen]);
+
+  const loadSavedLocation = useCallback(async () => {
+    try {
+      const result = await invoke<{ location: string; country?: string } | null>("get_saved_location");
+      if (result?.location) {
+        console.log("Loaded saved location:", result);
+        setSavedLocation(result);
+        setLocationInput(result.location);
+        setCountryInput(result.country || "");
+      }
+    } catch (e) {
+      console.error("Failed to load saved location:", e);
+    }
+  }, []);
+
+  const ensureLocation = useCallback(async () => {
+    if (savedLocation?.location) {
+      console.log("Using cached location:", savedLocation);
+      return savedLocation;
+    }
+
+    try {
+      const result = await invoke<{ location: string; country?: string } | null>("get_saved_location");
+      if (result?.location) {
+        console.log("Loaded location from disk:", result);
+        setSavedLocation(result);
+        setLocationInput(result.location);
+        setCountryInput(result.country || "");
+        return result;
+      }
+    } catch (e) {
+      console.error("Failed to load saved location:", e);
+    }
+
+    console.warn("No saved location found; prompting user.");
+    setLocationPromptOpen(true);
+    return null;
+  }, [savedLocation]);
 
   // Draw the waveform visualization
   const draw = useCallback(() => {
@@ -132,17 +193,11 @@ export default function MinimalRecorder() {
     setTranscript("");
     volumeRef.current = 0;
     targetVolumeRef.current = 0;
+    noiseFloorRef.current = 0;
 
     try {
-      // Start backend audio monitor
-      await invoke("start_monitor");
-
-      // Start the animation
-      requestAnimationFrame(draw);
-
-      // Start native recording
-      await startRecording();
-      console.log("Native recording started");
+      await invoke("start_recording");
+      console.log("Recording started");
     } catch (e) {
       console.error("Failed to start recording:", e);
       setState("error");
@@ -154,23 +209,11 @@ export default function MinimalRecorder() {
   const stop = useCallback(async () => {
     if (state !== "recording") return;
 
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
-    }
-
-    // Stop backend monitor
-    try {
-      await invoke("stop_monitor");
-    } catch (e) {
-      console.error("Failed to stop monitor:", e);
-    }
-
     setState("processing");
     setStatusMessage("⏳ Processing audio...");
 
     try {
-      // Stop native recording - returns the file path
-      const filePath = await stopRecording();
+      const filePath = await invoke<string>("stop_recording");
       console.log("Recording stopped, file at:", filePath);
 
       if (filePath) {
@@ -230,15 +273,27 @@ export default function MinimalRecorder() {
     setStatusMessage("🔍 Searching for events...");
 
     try {
+      const location = await ensureLocation();
+      if (!location) {
+        setState("transcribed");
+        setStatusMessage("📍 Tell us where you are");
+        pendingSearchRef.current = true;
+        return;
+      }
+
+      console.log("Searching with location:", location);
+
       const res = await fetch("http://127.0.0.1:8000/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: transcript,
           preferences: {
-            home_city: "San Francisco",
+            home_city: location.location,
+            country: location.country,
             radius_miles: 10,
             max_transit_minutes: 45,
+            time_window_days: 7,
           },
         }),
       });
@@ -263,7 +318,33 @@ export default function MinimalRecorder() {
       setState("error");
       setStatusMessage("❌ Could not connect to server");
     }
-  }, [transcript]);
+  }, [transcript, ensureLocation]);
+
+  const saveLocation = useCallback(async () => {
+    const location = locationInput.trim();
+    if (!location) {
+      return;
+    }
+
+    const payload = {
+      location,
+      country: countryInput.trim() || undefined,
+    };
+
+    try {
+      console.log("Saving location:", payload);
+      await invoke("set_saved_location", { location: payload });
+      setSavedLocation(payload);
+      setLocationPromptOpen(false);
+
+      if (pendingSearchRef.current && transcript.trim()) {
+        pendingSearchRef.current = false;
+        searchWithTranscript();
+      }
+    } catch (e) {
+      console.error("Failed to save location:", e);
+    }
+  }, [countryInput, locationInput, searchWithTranscript, transcript]);
 
   // Cancel and close window
   const cancel = useCallback(async () => {
@@ -273,8 +354,7 @@ export default function MinimalRecorder() {
     // Stop backend monitor
     if (state === "recording") {
       try {
-        await invoke("stop_monitor");
-        await stopRecording();
+        await invoke("cancel_recording");
       } catch (e) {
         console.error("Failed to stop recording on cancel:", e);
       }
@@ -288,6 +368,16 @@ export default function MinimalRecorder() {
     }
   }, [state]);
 
+  useEffect(() => {
+    handlersRef.current = {
+      start,
+      stop,
+      cancel,
+      search: searchWithTranscript,
+      saveLocation,
+    };
+  }, [start, stop, cancel, searchWithTranscript, saveLocation]);
+
   // Reset to idle
   const reset = useCallback(() => {
     setState("idle");
@@ -300,8 +390,23 @@ export default function MinimalRecorder() {
   useEffect(() => {
     const unlisten = listen("audio-level", (event: any) => {
       const payload = event.payload as { rms: number; peak: number };
-      // Update target volume with some gain
-      targetVolumeRef.current = payload.rms;
+      if (stateRef.current !== "recording") {
+        return;
+      }
+
+      const rms = payload.rms || 0;
+      lastAudioAtRef.current = Date.now();
+
+      if (noiseFloorRef.current === 0) {
+        noiseFloorRef.current = rms;
+      } else if (rms < noiseFloorRef.current * 1.5) {
+        // Adapt noise floor only when we're not significantly above it
+        noiseFloorRef.current = noiseFloorRef.current * 0.98 + rms * 0.02;
+      }
+
+      const gate = noiseFloorRef.current * 1.3 + 0.0025;
+      const signal = Math.max(0, rms - gate);
+      targetVolumeRef.current = Math.min(1, signal * 4.0);
     });
 
     return () => {
@@ -324,10 +429,20 @@ export default function MinimalRecorder() {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
-      // Stop monitor if running cleanup
-      invoke("stop_monitor").catch(console.error);
     };
   }, [state, start, stop]);
+
+  // Ensure animation loop starts when recording state is active
+  useEffect(() => {
+    if (state === "recording") {
+      animationRef.current = requestAnimationFrame(draw);
+      return () => {
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+      };
+    }
+  }, [state, draw]);
 
   // Initial draw on mount
   useEffect(() => {
@@ -340,34 +455,92 @@ export default function MinimalRecorder() {
     }
   }, []);
 
+  useEffect(() => {
+    loadSavedLocation();
+  }, [loadSavedLocation]);
+
   // Keyboard shortcuts - Alt+E for start/stop
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const handlers = handlersRef.current;
+      if (!handlers) {
+        return;
+      }
+
+      if (locationPromptOpenRef.current) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handlers.saveLocation();
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          setLocationPromptOpen(false);
+          return;
+        }
+        return;
+      }
+
       const isAltE = (e.key === "e" || e.key === "E") && (e.altKey || e.metaKey);
 
       if (isAltE) {
         e.preventDefault();
-        if (state === "recording") {
-          stop();
-        } else if (state === "idle" || state === "error") {
-          start();
+        if (stateRef.current === "recording") {
+          handlers.stop();
+        } else if (stateRef.current === "idle" || stateRef.current === "error") {
+          handlers.start();
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
-        cancel();
-      } else if (e.key === "Enter" && state === "transcribed") {
+        handlers.cancel();
+      } else if (e.key === "Enter" && stateRef.current === "transcribed") {
         e.preventDefault();
-        searchWithTranscript();
+        handlers.search();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state, stop, start, cancel, searchWithTranscript]);
+  }, []);
+
+  const locationOverlay = locationPromptOpen ? (
+    <div style={styles.locationOverlay}>
+      <div style={styles.locationModal}>
+        <div style={styles.locationTitle}>Where are you?</div>
+        <div style={styles.locationSubtitle}>We only store this locally on your device.</div>
+        <input
+          style={styles.locationInput}
+          placeholder="City, State/Region"
+          value={locationInput}
+          onChange={(e) => setLocationInput(e.target.value)}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <input
+          style={styles.locationInput}
+          placeholder="Country code (optional, e.g. US)"
+          value={countryInput}
+          onChange={(e) => setCountryInput(e.target.value.toUpperCase())}
+          onKeyDown={(e) => e.stopPropagation()}
+        />
+        <div style={styles.locationActions}>
+          <button style={styles.locationSaveButton} onClick={saveLocation}>
+            Save Location
+          </button>
+          <button
+            style={styles.locationCancelButton}
+            onClick={() => setLocationPromptOpen(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   // Show transcription view - this is the key view after recording
   if (state === "transcribed" || (state === "error" && transcript)) {
     return (
       <div style={styles.container}>
+        {locationOverlay}
         <div style={styles.transcriptContainer}>
           <div style={styles.transcriptLabel}>You said:</div>
           <div style={styles.transcriptBox}>
@@ -403,6 +576,7 @@ export default function MinimalRecorder() {
   if (state === "results" && events.length > 0) {
     return (
       <div style={styles.container}>
+        {locationOverlay}
         <div style={styles.resultsContainer}>
           <div style={styles.queryBox}>
             <span style={styles.queryLabel}>Query:</span> "{transcript}"
@@ -454,6 +628,7 @@ export default function MinimalRecorder() {
   // Main recording view
   return (
     <div style={styles.container}>
+      {locationOverlay}
       {/* Resize handle indicator */}
       <div style={styles.resizeHandle}>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -695,6 +870,67 @@ const styles: { [key: string]: React.CSSProperties } = {
     flex: 1,
     padding: 16,
     overflowY: "auto",
+  },
+  locationOverlay: {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+  },
+  locationModal: {
+    width: "90%",
+    maxWidth: 360,
+    backgroundColor: "#1f1f1f",
+    border: "1px solid #2f2f2f",
+    borderRadius: 10,
+    padding: 20,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  locationTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#fff",
+  },
+  locationSubtitle: {
+    fontSize: 12,
+    color: "#888",
+  },
+  locationInput: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid #3a3a3a",
+    backgroundColor: "#121212",
+    color: "#fff",
+    fontSize: 14,
+  },
+  locationActions: {
+    display: "flex",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  locationSaveButton: {
+    padding: "8px 14px",
+    borderRadius: 6,
+    border: "none",
+    backgroundColor: "#4a7c59",
+    color: "#fff",
+    cursor: "pointer",
+    fontSize: 13,
+  },
+  locationCancelButton: {
+    padding: "8px 14px",
+    borderRadius: 6,
+    border: "1px solid #3a3a3a",
+    backgroundColor: "transparent",
+    color: "#aaa",
+    cursor: "pointer",
+    fontSize: 13,
   },
   queryBox: {
     padding: "8px 12px",

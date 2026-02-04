@@ -105,7 +105,12 @@ class Manager:
                 "genres": parsed.genres,
                 "date": parsed.date,
                 "radius_miles": parsed.radius_miles,
-                "max_transit_minutes": parsed.max_transit_minutes
+                "max_transit_minutes": parsed.max_transit_minutes,
+                "time_window_days": parsed.time_window_days,
+                "country": parsed.country,
+                "search_lang": parsed.search_lang,
+                "latitude": parsed.latitude,
+                "longitude": parsed.longitude,
             }
         
         return state
@@ -129,7 +134,13 @@ class Manager:
                 query=state.parsed_intent.get("query", ""),
                 location=state.parsed_intent.get("location", ""),
                 genres=state.parsed_intent.get("genres", []),
-                radius_miles=state.parsed_intent.get("radius_miles", 5)
+                radius_miles=state.parsed_intent.get("radius_miles", 5),
+                country=state.parsed_intent.get("country"),
+                search_lang=state.parsed_intent.get("search_lang"),
+                time_window_days=state.parsed_intent.get("time_window_days", 7),
+                latitude=state.parsed_intent.get("latitude"),
+                longitude=state.parsed_intent.get("longitude"),
+                count=10,
             )
         
         return state

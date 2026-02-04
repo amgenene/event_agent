@@ -17,6 +17,7 @@ openai>=1.0.0
 python-dotenv>=1.0.0
 httpx>=0.25.0
 requests>=2.31.0
+reverse_geocoder>=1.5.1
 
 # Testing
 pytest>=7.4.0

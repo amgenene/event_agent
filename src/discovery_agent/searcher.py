@@ -1,7 +1,15 @@
-"""Event discovery agent using Tavily AI and domain-specific search."""
+"""Event discovery agent using provider-based search with LangGraph."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import os
 from typing import Optional
+
+from .graph import build_search_graph
+from .providers.base import SearchProvider
+from .providers.brave import BraveConfig, BraveSearchProvider
 
 
 @dataclass
@@ -22,26 +30,28 @@ class Event:
 class DiscoveryAgent:
     """Searches live web sources for free events."""
     
-    def __init__(self, tavily_api_key: str = None):
+    def __init__(self, provider: Optional[SearchProvider] = None):
         """
         Initialize discovery agent.
         
         Args:
-            tavily_api_key: API key for Tavily AI
+            provider: Search provider implementation
         """
-        self.tavily_api_key = tavily_api_key
-        self.domain_strategies = [
-            'site:eventbrite.com "free"',
-            'site:meetup.com "no cover charge"',
-            '"open to public" + "no tickets required"'
-        ]
+        self.provider = provider or self._build_default_provider()
+        self.graph = build_search_graph(self.provider) if self.provider else None
     
     def search_events(
         self,
         query: str,
         location: str,
         genres: list[str] = None,
-        radius_miles: int = 5
+        radius_miles: int = 5,
+        country: Optional[str] = None,
+        search_lang: Optional[str] = None,
+        time_window_days: int = 7,
+        latitude: Optional[float] = None,
+        longitude: Optional[float] = None,
+        count: int = 10,
     ) -> list[Event]:
         """
         Search for free events matching criteria.
@@ -51,38 +61,72 @@ class DiscoveryAgent:
             location: Location to search in
             genres: List of event genres/categories to filter
             radius_miles: Search radius in miles
+            country: ISO country code for search results
+            search_lang: Search language (e.g., en)
+            time_window_days: Time window in days from today
+            count: Max number of results to return
         
         Returns:
             List of Event objects
         """
-        if not self.tavily_api_key:
-            raise ValueError("Tavily API key not configured")
-        
-        events = []
-        
-        # Would call Tavily API here with domain-specific queries
-        # events = self._query_tavily(query, location, genres, radius_miles)
-        
+        if not self.provider or not self.graph:
+            raise ValueError("Discovery provider not configured")
+
+        state = {
+            "query": query,
+            "location": location,
+            "country": country,
+            "search_lang": search_lang,
+            "time_window_days": time_window_days,
+            "latitude": latitude,
+            "longitude": longitude,
+            "count": count,
+        }
+
+        result_state = self.graph.invoke(state)
+        results = result_state.get("results", []) or []
+
+        events: list[Event] = []
+        for result in results:
+            events.append(self._result_to_event(result, location))
+
         return events
-    
-    def _query_tavily(
-        self,
-        query: str,
-        location: str,
-        genres: list[str],
-        radius_miles: int
-    ) -> list[Event]:
-        """Query Tavily AI with domain-specific search strategies."""
-        # Placeholder for actual Tavily API call
-        results = []
-        
-        for strategy in self.domain_strategies:
-            search_query = f"{query} {location} {' '.join(genres)} {strategy}"
-            # results.extend(self._call_tavily_api(search_query))
-        
-        return results
-    
-    def _call_tavily_api(self, query: str) -> list[Event]:
-        """Make actual call to Tavily API."""
-        # Placeholder for API implementation
-        return []
+
+    def _result_to_event(self, result, location: str) -> Event:
+        title = getattr(result, "title", "") or ""
+        url = getattr(result, "url", "") or ""
+        description = getattr(result, "description", "") or ""
+
+        event_id = hashlib.md5(url.encode("utf-8")).hexdigest() if url else hashlib.md5(
+            title.encode("utf-8")
+        ).hexdigest()
+
+        return Event(
+            id=event_id,
+            title=title,
+            location=location or "",
+            date="TBD",
+            time="TBD",
+            description=description,
+            url=url,
+            price="Free",
+            category=None,
+        )
+
+    def _build_default_provider(self) -> Optional[SearchProvider]:
+        provider_name = os.environ.get("DISCOVERY_PROVIDER", "brave").lower()
+
+        if provider_name == "brave":
+            api_key = os.environ.get("BRAVE_API_KEY")
+            if not api_key:
+                return None
+            base_url = os.environ.get("BRAVE_API_BASE_URL") or "https://api.search.brave.com/res/v1/web/search"
+            timeout = int(os.environ.get("BRAVE_API_TIMEOUT_SECONDS", "15"))
+            config = BraveConfig(
+                api_key=api_key,
+                base_url=base_url,
+                timeout_seconds=timeout,
+            )
+            return BraveSearchProvider(config)
+
+        raise ValueError(f"Unknown discovery provider: {provider_name}")

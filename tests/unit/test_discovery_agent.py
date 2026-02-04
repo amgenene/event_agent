@@ -1,7 +1,9 @@
 """Unit tests for discovery agent module."""
 
 import pytest
+
 from src.discovery_agent.searcher import DiscoveryAgent, Event
+from src.discovery_agent.providers.base import SearchRequest, SearchResult, SearchProvider
 
 
 class TestDiscoveryAgent:
@@ -10,18 +12,28 @@ class TestDiscoveryAgent:
     @pytest.fixture
     def agent(self):
         """Create discovery agent instance."""
-        return DiscoveryAgent(tavily_api_key="test_key")
+        class StubProvider(SearchProvider):
+            def search(self, request: SearchRequest):
+                return [
+                    SearchResult(
+                        title="Test Event",
+                        url="https://example.com/event",
+                        description="Free community event"
+                    )
+                ]
+
+        return DiscoveryAgent(provider=StubProvider())
     
     def test_agent_initialization(self):
         """Test agent initialization with API key."""
-        agent = DiscoveryAgent(tavily_api_key="test_key")
-        assert agent.tavily_api_key == "test_key"
+        agent = DiscoveryAgent(provider=None)
+        assert agent is not None
     
     def test_agent_requires_api_key(self):
         """Test that agent requires API key."""
-        agent = DiscoveryAgent()
+        agent = DiscoveryAgent(provider=None)
         
-        with pytest.raises(ValueError, match="Tavily API key not configured"):
+        with pytest.raises(ValueError, match="Discovery provider not configured"):
             agent.search_events("test", "SF")
     
     def test_search_events_returns_list(self, agent):
@@ -33,12 +45,6 @@ class TestDiscoveryAgent:
         )
         
         assert isinstance(result, list)
-    
-    def test_domain_strategies_set(self, agent):
-        """Test that domain search strategies are initialized."""
-        assert len(agent.domain_strategies) > 0
-        assert 'site:eventbrite.com "free"' in agent.domain_strategies
-        assert 'site:meetup.com "no cover charge"' in agent.domain_strategies
     
     def test_event_dataclass(self):
         """Test Event dataclass creation."""
