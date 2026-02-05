@@ -72,6 +72,7 @@ class SearchResponse(BaseModel):
     success: bool
     events: List[EventResponse]
     message: str
+    query_used: Optional[str] = None
 
 
 class VerifyEventRequest(BaseModel):
@@ -145,7 +146,8 @@ async def search_events(request: EventSearchRequest):
         return SearchResponse(
             success=result.get("success", False),
             events=event_responses,
-            message="Search completed successfully" if result.get("success") else "No events found"
+            message="Search completed successfully" if result.get("success") else "No events found",
+            query_used=result.get("query_used")
         )
     
     except Exception as e:

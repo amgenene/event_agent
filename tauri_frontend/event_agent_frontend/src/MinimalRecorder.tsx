@@ -19,6 +19,7 @@ interface SearchResponse {
   success: boolean;
   events: Event[];
   message: string;
+  query_used?: string;
 }
 
 type RecorderState = "idle" | "recording" | "processing" | "error" | "transcribed" | "results";
@@ -35,6 +36,7 @@ export default function MinimalRecorder() {
   const [statusMessage, setStatusMessage] = useState<string>("Press ⌥E to start");
   const [transcript, setTranscript] = useState<string>("");
   const [events, setEvents] = useState<Event[]>([]);
+  const [queryUsed, setQueryUsed] = useState<string>("");
   const [savedLocation, setSavedLocation] = useState<{ location: string; country?: string } | null>(null);
   const [locationPromptOpen, setLocationPromptOpen] = useState<boolean>(false);
   const [locationInput, setLocationInput] = useState<string>("");
@@ -306,6 +308,7 @@ export default function MinimalRecorder() {
 
       const data: SearchResponse = await res.json();
       setEvents(data.events);
+      setQueryUsed(data.query_used || "");
       if (data.events.length > 0) {
         setState("results");
         setStatusMessage(`✅ Found ${data.events.length} event(s)`);
@@ -384,6 +387,7 @@ export default function MinimalRecorder() {
     setStatusMessage("Press ⌥E to start");
     setTranscript("");
     setEvents([]);
+    setQueryUsed("");
   }, []);
 
   // Listen for audio levels from backend
@@ -546,6 +550,9 @@ export default function MinimalRecorder() {
           <div style={styles.transcriptBox}>
             <div style={styles.transcriptText}>{transcript || "(No speech detected)"}</div>
           </div>
+          {queryUsed && (
+            <div style={styles.queryHint}>Search query: {queryUsed}</div>
+          )}
           <div style={styles.searchPrompt}>Search for events?</div>
         </div>
         <div style={styles.toolbar}>
@@ -579,7 +586,7 @@ export default function MinimalRecorder() {
         {locationOverlay}
         <div style={styles.resultsContainer}>
           <div style={styles.queryBox}>
-            <span style={styles.queryLabel}>Query:</span> "{transcript}"
+            <span style={styles.queryLabel}>Query:</span> "{queryUsed || transcript}"
           </div>
           <h3 style={styles.resultsTitle}>📅 Found {events.length} event(s)</h3>
           <div style={styles.eventsList}>
@@ -870,6 +877,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     flex: 1,
     padding: 16,
     overflowY: "auto",
+  },
+  queryHint: {
+    marginTop: 12,
+    fontSize: 12,
+    color: "#777",
   },
   locationOverlay: {
     position: "absolute",

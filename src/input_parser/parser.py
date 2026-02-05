@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.location.geo import resolve_location_from_coords
+from src.location.country import normalize_country
 
 
 @dataclass
@@ -65,6 +66,8 @@ class InputParser:
         # Extract date if mentioned
         date = self._extract_date(user_input)
         
+        normalized_country = normalize_country(user_preferences.get("country") or resolved_country)
+
         return ParsedIntent(
             query=user_input,
             location=location,
@@ -73,7 +76,7 @@ class InputParser:
             radius_miles=user_preferences.get("radius_miles", 5),
             max_transit_minutes=user_preferences.get("max_transit_minutes", 30),
             time_window_days=user_preferences.get("time_window_days", 7),
-            country=user_preferences.get("country") or resolved_country,
+            country=normalized_country,
             search_lang=user_preferences.get("search_lang"),
             latitude=latitude,
             longitude=longitude,

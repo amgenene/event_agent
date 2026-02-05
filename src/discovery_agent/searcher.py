@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import logging
 import os
 from typing import Optional
 
 from .graph import build_search_graph
 from .providers.base import SearchProvider
 from .providers.brave import BraveConfig, BraveSearchProvider
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -52,7 +55,7 @@ class DiscoveryAgent:
         latitude: Optional[float] = None,
         longitude: Optional[float] = None,
         count: int = 10,
-    ) -> list[Event]:
+    ) -> tuple[list[Event], str]:
         """
         Search for free events matching criteria.
         
@@ -72,6 +75,15 @@ class DiscoveryAgent:
         if not self.provider or not self.graph:
             raise ValueError("Discovery provider not configured")
 
+        logger.info(
+            "Discovery search: query=%s location=%s country=%s window_days=%s count=%s",
+            query,
+            location,
+            country,
+            time_window_days,
+            count,
+        )
+
         state = {
             "query": query,
             "location": location,
@@ -85,12 +97,20 @@ class DiscoveryAgent:
 
         result_state = self.graph.invoke(state)
         results = result_state.get("results", []) or []
+        logger.info("Discovery search returned %s raw results", len(results))
 
         events: list[Event] = []
         for result in results:
             events.append(self._result_to_event(result, location))
 
-        return events
+        logger.info("Discovery search mapped %s events", len(events))
+        query_used = (
+            result_state.get("built_query")
+            or result_state.get("formatted_query")
+            or query
+        )
+
+        return events, query_used
 
     def _result_to_event(self, result, location: str) -> Event:
         title = getattr(result, "title", "") or ""
@@ -119,6 +139,7 @@ class DiscoveryAgent:
         if provider_name == "brave":
             api_key = os.environ.get("BRAVE_API_KEY")
             if not api_key:
+                logger.warning("BRAVE_API_KEY not set; discovery provider disabled.")
                 return None
             base_url = os.environ.get("BRAVE_API_BASE_URL") or "https://api.search.brave.com/res/v1/web/search"
             timeout = int(os.environ.get("BRAVE_API_TIMEOUT_SECONDS", "15"))
@@ -129,4 +150,5 @@ class DiscoveryAgent:
             )
             return BraveSearchProvider(config)
 
+        logger.error("Unknown discovery provider requested: %s", provider_name)
         raise ValueError(f"Unknown discovery provider: {provider_name}")

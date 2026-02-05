@@ -66,3 +66,17 @@ class TestInputParser:
         result = parser.parse_input("Find music events")
         
         assert result.time_window_days == 7
+
+    def test_parsed_intent_normalizes_country(self, parser):
+        """Test that country is normalized to ISO alpha-2."""
+        preferences = {
+            "home_city": "New York",
+            "country": "ny",
+        }
+
+        result = parser.parse_input("Find events", preferences)
+        assert result.country is None
+
+        preferences["country"] = "us"
+        result = parser.parse_input("Find events", preferences)
+        assert result.country == "US"

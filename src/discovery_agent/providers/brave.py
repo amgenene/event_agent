@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import httpx
+import logging
 
 from .base import SearchProvider, SearchRequest, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -43,12 +46,26 @@ class BraveSearchProvider(SearchProvider):
             "X-Subscription-Token": self.config.api_key,
         }
 
-        response = self._client.get(self.config.base_url, params=params, headers=headers)
-        response.raise_for_status()
+        logger.debug(
+            "Brave search request: q=%s count=%s country=%s lang=%s",
+            request.query,
+            request.count,
+            request.country,
+            request.search_lang,
+        )
+
+        try:
+            print(self.config.api_key, "api_key")
+            response = self._client.get(self.config.base_url, params=params, headers=headers)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            logger.exception("Brave search request failed: %s", exc)
+            raise
 
         data = response.json()
         web = data.get("web", {})
         results = web.get("results", [])
+        logger.debug("Brave search results: %s items", len(results))
 
         normalized: List[SearchResult] = []
         for item in results:
@@ -72,4 +89,5 @@ class BraveSearchProvider(SearchProvider):
                 )
             )
 
+        logger.info("Brave search normalized %s results", len(normalized))
         return normalized

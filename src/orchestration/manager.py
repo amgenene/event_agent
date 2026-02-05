@@ -25,6 +25,7 @@ class WorkflowState:
     calendar_gaps: Optional[list] = None
     discovered_events: Optional[list] = None
     verified_events: Optional[list] = None
+    query_used: Optional[str] = None
     relaxation_attempts: int = 0
     max_relaxation_attempts: int = 3
     error: Optional[str] = None
@@ -90,6 +91,7 @@ class Manager:
         return {
             "events": state.verified_events or [],
             "state": state,
+            "query_used": state.query_used,
             "success": bool(state.verified_events)
         }
     
@@ -130,7 +132,7 @@ class Manager:
         state.current_step = WorkflowStep.DISCOVERY
         
         if self.discovery_agent and state.parsed_intent:
-            state.discovered_events = self.discovery_agent.search_events(
+            events, query_used = self.discovery_agent.search_events(
                 query=state.parsed_intent.get("query", ""),
                 location=state.parsed_intent.get("location", ""),
                 genres=state.parsed_intent.get("genres", []),
@@ -142,6 +144,8 @@ class Manager:
                 longitude=state.parsed_intent.get("longitude"),
                 count=10,
             )
+            state.discovered_events = events
+            state.query_used = query_used
         
         return state
     
