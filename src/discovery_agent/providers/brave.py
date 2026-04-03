@@ -55,8 +55,9 @@ class BraveSearchProvider(SearchProvider):
         )
 
         try:
-            print(self.config.api_key, "api_key")
-            response = self._client.get(self.config.base_url, params=params, headers=headers)
+            response = self._client.get(
+                self.config.base_url, params=params, headers=headers
+            )
             response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.exception("Brave search request failed: %s", exc)

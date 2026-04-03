@@ -9,10 +9,10 @@ langchain>=0.1.0
 openai>=1.0.0
 
 # API Integrations (Placeholder - Update with real keys)
-# tavily-python>=0.1.0  # Tavily AI
+tavily-python==0.7.21  # Tavily AI
 # nylas>=6.0.0  # Nylas Calendar
 # google-maps-services>=1.6.3  # Google Maps
-
+python-multipart==0.0.22
 # Utilities
 python-dotenv>=1.0.0
 httpx>=0.25.0
@@ -32,6 +32,14 @@ flake8>=6.0.0
 mypy>=1.0.0
 nylas==6.14.2
 faster-whisper==1.2.1
+deepagents==0.3.11
+
+# Observability
+sentry-sdk[fastapi]>=2.0.0
+prometheus-client>=0.20.0
+prometheus-fastapi-instrumentator>=7.0.0
+structlog>=24.0.0
+
 # Optional for production
 # redis>=5.0.0  # Session state management
 # gunicorn>=21.0.0  # Production server

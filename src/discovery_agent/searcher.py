@@ -11,6 +11,7 @@ from typing import Optional
 from .graph import build_search_graph
 from .providers.base import SearchProvider
 from .providers.brave import BraveConfig, BraveSearchProvider
+from .providers.tavily import TavilyProvider
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,6 @@ class DiscoveryAgent:
         result_state = self.graph.invoke(state)
         results = result_state.get("results", []) or []
         logger.info("Discovery search returned %s raw results", len(results))
-
         events: list[Event] = []
         for result in results:
             events.append(self._result_to_event(result, location))
@@ -120,7 +120,6 @@ class DiscoveryAgent:
         event_id = hashlib.md5(url.encode("utf-8")).hexdigest() if url else hashlib.md5(
             title.encode("utf-8")
         ).hexdigest()
-
         return Event(
             id=event_id,
             title=title,
@@ -149,6 +148,13 @@ class DiscoveryAgent:
                 timeout_seconds=timeout,
             )
             return BraveSearchProvider(config)
+        
+        if provider_name == "tavily":
+            api_key = os.environ.get("TAVILY_API_KEY")
+            if not api_key:
+                logger.warning("TAVILY_API_KEY not set; discovery provider disabled.")
+                return None
+            return TavilyProvider()
 
         logger.error("Unknown discovery provider requested: %s", provider_name)
         raise ValueError(f"Unknown discovery provider: {provider_name}")

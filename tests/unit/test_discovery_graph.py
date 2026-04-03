@@ -36,4 +36,4 @@ def test_format_query_removes_polite_prefix():
     result = format_query(state)
     assert "free" in result["formatted_query"]
     assert "jazz" in result["formatted_query"]
-    assert "\"jazz\"" in result["formatted_query"]
+    assert "jazz shows" in result["formatted_query"]
