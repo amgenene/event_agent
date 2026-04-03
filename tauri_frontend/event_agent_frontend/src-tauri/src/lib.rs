@@ -1,16 +1,15 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
-use tauri::{AppHandle, Emitter, Manager, State, Window};
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 
+#[allow(dead_code)]
 struct CpalStreamWrapper(cpal::Stream);
 
-// cpal::Stream on macOS is not Send/Sync by default, but we need it for Tauri State.
-// Since we protect it with a Mutex, it's generally safe to move effectively.
 unsafe impl Send for CpalStreamWrapper {}
 unsafe impl Sync for CpalStreamWrapper {}
 
@@ -232,7 +231,8 @@ fn start_recording(state: State<RecordingState>, window: Window) -> Result<(), S
             )
         }
         _ => return Err("Unsupported sample format".to_string()),
-    }.map_err(|e| e.to_string())?;
+    }
+    .map_err(|e| e.to_string())?;
 
     stream.play().map_err(|e| e.to_string())?;
 
@@ -253,7 +253,11 @@ fn stop_recording(state: State<RecordingState>) -> Result<String, String> {
 
     let sample_rate = {
         let guard = state.sample_rate.lock().map_err(|e| e.to_string())?;
-        if *guard == 0 { 44_100 } else { *guard }
+        if *guard == 0 {
+            44_100
+        } else {
+            *guard
+        }
     };
 
     let samples = {
@@ -298,10 +302,7 @@ fn cancel_recording(state: State<RecordingState>) -> Result<(), String> {
 }
 
 fn location_file_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?;
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("location.json"))
 }
@@ -332,7 +333,9 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+    use tauri_plugin_global_shortcut::{
+        Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
+    };
 
     // Register Alt+E as the global shortcut (SuperWhisper-like behavior)
     let show_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::KeyE);

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import * as Sentry from "@sentry/react";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -189,6 +190,12 @@ export default function MinimalRecorder() {
   const start = useCallback(async () => {
     if (state === "recording" || state === "processing") return;
 
+    Sentry.addBreadcrumb({
+      category: "recording",
+      message: "Recording started",
+      level: "info",
+    });
+
     setState("recording");
     setStatusMessage("🎙️ Recording... (⌥E to stop)");
     setEvents([]);
@@ -202,6 +209,7 @@ export default function MinimalRecorder() {
       console.log("Recording started");
     } catch (e) {
       console.error("Failed to start recording:", e);
+      Sentry.captureException(e, { tags: { action: "start_recording" } });
       setState("error");
       setStatusMessage("❌ Failed to start recording");
     }
@@ -244,6 +252,11 @@ export default function MinimalRecorder() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Transcription failed:", errorText);
+        Sentry.captureMessage("Transcription failed", {
+          level: "error",
+          tags: { action: "transcribe" },
+          extra: { error: errorText, file_path: filePath },
+        });
         setState("error");
         setStatusMessage("❌ Transcription failed: " + errorText);
         return;
@@ -262,6 +275,7 @@ export default function MinimalRecorder() {
       }
     } catch (e) {
       console.error("Transcription error:", e);
+      Sentry.captureException(e, { tags: { action: "transcribe" } });
       setState("error");
       setStatusMessage("❌ Could not connect to server");
     }
@@ -270,6 +284,12 @@ export default function MinimalRecorder() {
   // Search for events after transcription
   const searchWithTranscript = useCallback(async () => {
     if (!transcript.trim()) return;
+
+    const span = Sentry.startInactiveSpan({
+      name: "search_events",
+      op: "search",
+      attributes: { transcript_length: transcript.length },
+    });
 
     setState("processing");
     setStatusMessage("🔍 Searching for events...");
@@ -280,6 +300,7 @@ export default function MinimalRecorder() {
         setState("transcribed");
         setStatusMessage("📍 Tell us where you are");
         pendingSearchRef.current = true;
+        span.end();
         return;
       }
 
@@ -301,8 +322,14 @@ export default function MinimalRecorder() {
       });
 
       if (!res.ok) {
+        Sentry.captureMessage("Search failed", {
+          level: "error",
+          tags: { action: "search" },
+          extra: { status: res.status },
+        });
         setState("error");
         setStatusMessage("❌ Search failed");
+        span.end();
         return;
       }
 
@@ -312,14 +339,23 @@ export default function MinimalRecorder() {
       if (data.events.length > 0) {
         setState("results");
         setStatusMessage(`✅ Found ${data.events.length} event(s)`);
+        Sentry.addBreadcrumb({
+          category: "search",
+          message: `Found ${data.events.length} events for: ${data.query_used || transcript}`,
+          level: "info",
+          data: { event_count: data.events.length },
+        });
       } else {
         setState("transcribed");
         setStatusMessage("No events found for your query");
       }
+      span.end();
     } catch (e) {
       console.error(e);
+      Sentry.captureException(e, { tags: { action: "search" } });
       setState("error");
       setStatusMessage("❌ Could not connect to server");
+      span.end();
     }
   }, [transcript, ensureLocation]);
 
