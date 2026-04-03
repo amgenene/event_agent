@@ -2,8 +2,10 @@
 
 from enum import Enum
 from dataclasses import dataclass
-from typing import Optional
+import logging
+from typing import Optional, List
 
+logger = logging.getLogger(__name__)
 
 class WorkflowStep(Enum):
     """Steps in the event discovery workflow."""
@@ -74,7 +76,6 @@ class Manager:
             
             # Step 2: Constraint Check - check calendar
             state = self._step_constraint_check(state)
-            
             # Step 3: Discovery - search for events
             state = self._step_discovery(state)
             
@@ -144,6 +145,7 @@ class Manager:
                 longitude=state.parsed_intent.get("longitude"),
                 count=10,
             )
+            logger.info("events from manager: %s", events)
             state.discovered_events = events
             state.query_used = query_used
         

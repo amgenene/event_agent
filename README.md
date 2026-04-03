@@ -1,283 +1,234 @@
-# EventFinder AI - Complete Technical Implementation
+# EventFinder AI
 
-Multi-agent autonomous system for discovering free events using voice commands and natural language processing.
+Autonomous event planning with friends. Discover what's happening, check everyone's availability, vote on options, and confirm — all in one flow.
+
+## Quick Start
+
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.10+ (for local dev)
+- Node.js & Rust (for Tauri frontend)
+
+### Option 1: Docker Compose (Recommended)
+
+```bash
+# 1. Copy and configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# 2. Start all backend services
+make up
+
+# 3. Verify API is running
+curl http://localhost:8000/health
+# Swagger docs: http://localhost:8000/docs
+
+# 4. Run Tauri frontend (separate terminal)
+cd tauri_frontend/event_agent_frontend
+npm install && npm run tauri dev
+```
+
+### Option 2: Local Development
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env  # then edit with your keys
+uvicorn src.api:app --reload
+```
+
+### Hot Reload
+
+```bash
+make dev
+# Changes to src/ sync automatically without container restarts
+```
+
+## Configuration
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Purpose | Get It |
+|----------|---------|--------|
+| `TAVILY_API_KEY` | Web search & event discovery | [tavily.com](https://tavily.com) |
+| `OPENAI_API_KEY` | LLM (parser, auditor) | [platform.openai.com](https://platform.openai.com) |
+| `NYLAS_API_KEY` | Calendar integration | [nylas.com](https://nylas.com) |
+| `NYLAS_GRANT_ID` | Calendar access grant | Nylas dashboard |
+| `NYLAS_API_URI` | Nylas API endpoint | Nylas dashboard |
+| `OPENROUTE_SERVICE_API_KEY` | Travel time calculation | [openrouteservice.org](https://openrouteservice.org) |
+
+## Makefile Commands
+
+```bash
+make up           # Start all services
+make down         # Stop all services
+make logs         # Follow API logs
+make shell        # Open shell in API container
+make test         # Run test suite (115 tests)
+make test-cov     # Run with coverage
+make test-unit    # Unit tests only
+make test-int     # Integration tests only
+make lint         # Run linter
+make lint-fix     # Auto-fix lint issues
+make format       # Format code with black
+make dev          # Start with hot-reload watch mode
+make clean        # Stop and remove all volumes
+```
+
+## API Endpoints
+
+### Core Search
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/search` | Search for free events |
+| `POST` | `/verify` | Verify if an event is truly free |
+| `POST` | `/transcribe` | Transcribe uploaded audio |
+| `GET` | `/health` | Health check |
+
+### Group Planning
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/plans` | Create a new plan |
+| `GET` | `/api/plans/{slug}` | Get plan details (public) |
+| `PATCH` | `/api/plans/{slug}/admin` | Update plan (admin token required) |
+| `DELETE` | `/api/plans/{slug}/admin` | Cancel plan |
+| `POST` | `/api/plans/{slug}/votes` | Submit vote |
+| `GET` | `/api/plans/{slug}/stream` | SSE stream for live updates |
+| `POST` | `/api/plans/{slug}/availability` | Compute group availability |
+| `POST` | `/api/plans/{slug}/invite` | Send email invitations |
+
+## How It Works
+
+### The Agentic Loop
+
+1. **Intent Parsing** — LLM extracts structured search intent from voice or text
+2. **Availability Check** — Nylas scans all participants' calendars for overlapping free time
+3. **Event Discovery** — Tavily AI searches event platforms with domain targeting and date filtering
+4. **Verification** — LLM-powered auditor confirms events are truly free, flags hidden costs
+5. **Relaxation** — If zero results, automatically broadens parameters and retries
+
+### Group Planning Flow
+
+1. **Search** — Find events via voice or text
+2. **Create Plan** — Select events, add friends, pick time slots (auto-calculated from calendars)
+3. **Share Link** — System generates a shareable voting link
+4. **Vote** — Friends open the link, swipe yes/maybe/no on each event card
+5. **Confirm** — When quorum is reached (60%+ yes), the plan is confirmed and everyone is notified
+
+### Live Sync
+
+Availability recalculates continuously as participants' calendars change. The voting page shows live activity as friends vote. Plans auto-expire after 7 days.
+
+## Running Tests
+
+```bash
+pytest                    # All 115 tests
+pytest --cov=src tests/   # With coverage
+pytest tests/integration/ # Integration tests only
+pytest tests/unit/        # Unit tests only
+make test                 # Inside Docker
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────┐
+│           Tauri Frontend (Native)           │
+│  Search · Plans · Voting · Calendar         │
+└─────────────────────┬───────────────────────┘
+                      │ HTTP + SSE
+┌─────────────────────▼───────────────────────┐
+│          Docker Compose Services            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │  FastAPI │  │PostgreSQL│  │  Redis   │  │
+│  │  :8000   │  │  :5432   │  │  :6379   │  │
+│  └──────────┘  └──────────┘  └──────────┘  │
+└─────────────────────┬───────────────────────┘
+                      │
+              ┌───────┴───────┐
+              │  External APIs │
+              │  Tavily · Nylas│
+              │  OpenRoute     │
+              └───────────────┘
+```
+
+### Technology Stack
+
+| Component | Technology |
+|-----------|-----------|
+| **Orchestration** | LangGraph |
+| **Frontend** | Tauri, React, TypeScript |
+| **Backend** | FastAPI, Python 3.11 |
+| **Web Search** | Tavily AI (primary), Brave (fallback) |
+| **LLM** | OpenAI GPT-4o-mini |
+| **Calendars** | Nylas (Google, Outlook, iCloud) |
+| **Maps/Travel** | OpenRouteService |
+| **Database** | PostgreSQL |
+| **Cache/Real-time** | Redis (SSE pub/sub, availability cache) |
+| **Email** | Resend |
+| **Testing** | Pytest (115 tests) |
+
+## Edge Case Handling
+
+| Failure | Response |
+|---------|----------|
+| **Zero Results** | Expand radius or broaden categories |
+| **Schedule Conflict** | Accept drop-in events with grace period |
+| **Hidden Costs** | LLM auditor flags and excludes |
+| **API Timeout** | Failover to secondary provider |
+| **Calendar Changed** | Auto-recalculate availability, notify group |
 
 ## Project Structure
 
 ```
 event_searcher/
 ├── src/
-│   ├── api.py                      # FastAPI application
-│   ├── input_parser/
-│   │   ├── __init__.py
-│   │   └── parser.py               # Voice-to-intent conversion
+│   ├── api.py                          # FastAPI application
+│   ├── deps.py                         # Dependency injection
+│   ├── input_parser/parser.py          # LLM + rule-based intent parsing
 │   ├── discovery_agent/
-│   │   ├── __init__.py
-│   │   └── searcher.py             # Event discovery via Tavily AI
-│   ├── calendar_agent/
-│   │   ├── __init__.py
-│   │   └── scheduler.py            # Calendar integration & travel time
-│   ├── auditor/
-│   │   ├── __init__.py
-│   │   └── verifier.py             # Free event verification
-│   ├── resilience/
-│   │   ├── __init__.py
-│   │   └── edge_case_handler.py    # Edge case handling
-│   └── orchestration/
-│       ├── __init__.py
-│       └── manager.py              # Workflow orchestration
-├── tauri_frontend/                 # Desktop Application
-│   ├── src-tauri/                  # Rust backend for Tauri
-│   └── src/                        # React Frontend
+│   │   ├── searcher.py                 # Event discovery via Tavily
+│   │   ├── graph.py                    # LangGraph pipeline
+│   │   ├── query_formatter.py          # Search query optimization
+│   │   └── providers/
+│   │       ├── base.py                 # Provider interface
+│   │       ├── tavily.py               # Tavily (primary)
+│   │       └── brave.py                # Brave (fallback)
+│   ├── calendar_agent/scheduler.py     # Calendar + travel time
+│   ├── auditor/verifier.py             # LLM-powered free event check
+│   ├── resilience/edge_case_handler.py # Relaxation strategies
+│   ├── orchestration/manager.py        # 5-step workflow
+│   ├── services/
+│   │   ├── calendar_service.py         # Nylas integration
+│   │   └── routes_service.py           # OpenRouteService
+│   ├── models/schemas.py               # Pydantic models
+│   ├── location/                       # Geocoding + country normalization
+│   └── transcription/transcriber.py    # Whisper STT
+├── tauri_frontend/                     # Desktop app (runs natively)
 ├── tests/
-│   ├── unit/
-│   │   ├── test_input_parser.py
-│   │   ├── test_discovery_agent.py
-│   │   ├── test_calendar_agent.py
-│   │   ├── test_auditor.py
-│   │   ├── test_resilience.py
-│   │   └── test_orchestration.py
-│   └── integration/
-│       └── test_complete_workflow.py
-├── docs/
-│   ├── input_parser/
-│   ├── discovery_agent/
-│   ├── calendar_agent/
-│   ├── auditor/
-│   ├── resilience/
-│   ├── orchestration/
-│   └── stack/
-├── conftest.py                     # Pytest configuration
-├── pyproject.toml                  # Project dependencies
-├── requirements.txt                # Additional dependencies
-└── README.md                       # This file
+│   ├── unit/                           # 80+ unit tests
+│   └── integration/                    # 35+ integration tests
+├── docker-compose.yml                  # API + PostgreSQL + Redis
+├── Dockerfile.prod                     # Multi-stage production build
+├── Dockerfile.dev                      # Dev with hot-reload
+├── Makefile                            # One-command workflows
+└── .opencode/plans/                    # Design docs & prototypes
+    ├── improvements.md                 # Full refactor & release plan
+    ├── group-planning-design.md        # Group planning architecture
+    └── prototype.html                  # Interactive UI prototype
 ```
-
-## Components
-
-### 1. **Desktop App** (Frontend)
-- **Tech**: Tauri + React + TypeScript
-- **Role**: Voice command capture, displaying itineraries, and user feedback.
-
-### 2. **Input Parser** (Whisper Layer)
-Converts voice/text input to structured intent using:
-- Speech-to-text (STT) via OpenAI Whisper or Deepgram
-- LLM-powered intent mapping
-- Default preferences for vague inputs
-
-### 2. **Discovery Agent** (Live Search)
-Searches for events using:
-- Tavily AI (primary search engine)
-- Domain-specific crawling strategies
-- Site-specific searches (Eventbrite, Meetup, etc.)
-
-### 3. **Calendar Agent** (Logic Gap)
-Manages scheduling constraints:
-- Nylas API for unified calendar access
-- Travel time calculation via Google Maps
-- Availability gap detection
-
-### 4. **Auditor** (Verification)
-Ensures events are truly free:
-- LLM-powered description analysis
-- Hidden cost detection
-- Warnings for conditional pricing
-
-### 5. **Resilience Handler** (Edge Cases)
-Manages failures with relaxation strategies:
-- Search radius expansion
-- Category broadening
-- API failover
-- Drop-in event flexibility
-
-### 6. **Manager** (Orchestration)
-Coordinates the 5-step workflow:
-1. Ingestion - Parse voice to intent
-2. Constraint Check - Check calendar availability
-3. Discovery - Search for events
-4. Verification - Audit events
-5. Relaxation - Handle edge cases
-
-## Installation
-
-```bash
-# Clone repository
-git clone <repo-url>
-cd event_searcher
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Or using poetry
-poetry install
-```
-
-## Configuration
-
-Create a `.env` file with required API keys:
-
-```env
-OPENAI_API_KEY=your_openai_key
-BRAVE_API_KEY=your_brave_key
-DISCOVERY_PROVIDER=brave
-BRAVE_API_BASE_URL=https://api.search.brave.com/res/v1/web/search
-BRAVE_API_TIMEOUT_SECONDS=15
-NYLAS_API_KEY=your_nylas_key
-GOOGLE_MAPS_API_KEY=your_maps_key
-DEEPGRAM_API_KEY=your_deepgram_key
-```
-
-## Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src tests/
-
-# Run specific test file
-pytest tests/unit/test_input_parser.py
-
-# Run integration tests only
-pytest tests/integration/
-
-# Run with verbose output
-pytest -v
-```
-
-## Running the API
-
-```bash
-# Start development server
-uvicorn src.api:app --reload
-
-# Or run directly
-python src/api.py
-
-# API will be available at http://localhost:8000
-# API will be available at http://localhost:8000
-# Swagger docs at http://localhost:8000/docs
-```
-
-## Running the Desktop App (Frontend)
-
-Prerequisites: [Rust](https://www.rust-lang.org/tools/install) and Node.js installed.
-
-```bash
-cd tauri_frontend/event_agent_frontend
-
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run tauri dev
-```
-
-## API Endpoints
-
-### POST `/search`
-Search for free events
-```json
-{
-  "query": "Find jazz events",
-  "preferences": {
-    "home_city": "San Francisco",
-    "favorite_genres": ["jazz", "music"],
-    "radius_miles": 10,
-    "max_transit_minutes": 45
-  }
-}
-```
-
-### POST `/verify`
-Verify if an event is free
-```json
-{
-  "description": "Live jazz performance. No cover charge."
-}
-```
-
-### GET `/health`
-Health check endpoint
-
-## Technology Stack
-
-| Component | Technology |
-|-----------|-----------|
-| **Orchestration** | LangGraph |
-| **Frontend** | Tauri, React, TypeScript |
-| **Web Framework** | FastAPI |
-| **STT** | Deepgram Aura |
-| **Calendar API** | Nylas |
-| **Web Search** | Tavily AI |
-| **Maps/Travel** | Google Maps API |
-| **State Management** | Redis |
-| **Testing** | Pytest |
-| **Language** | Python 3.10+ |
-
-## Development
-
-### Code Style
-Uses Black for formatting and isort for import sorting:
-```bash
-black src/ tests/
-isort src/ tests/
-```
-
-### Type Checking
-```bash
-mypy src/
-```
-
-### Linting
-```bash
-flake8 src/ tests/
-```
-
-## Architecture Principles
-
-- **State Graph Pattern** - Handles complex workflows with backtracking
-- **Multi-Agent Design** - Specialized agents for specific tasks
-- **Resilience-First** - Built-in relaxation and retry strategies
-- **Domain-Specific Search** - Smart crawling for free events
-- **Hidden Cost Detection** - LLM-powered verification
-
-## Edge Case Handling
-
-| Failure | Response | Strategy |
-|---------|----------|----------|
-| **Zero Results** | RelaxationNode | Expand radius or broaden categories |
-| **Schedule Conflict** | CalendarNode | Accept drop-in events with grace period |
-| **Hidden Costs** | AuditorNode | Warn user and exclude event |
-| **API Timeout** | ManagerNode | Failover to secondary API |
-
-## Future Enhancements
-
-- [ ] Real API integrations (Tavily, Nylas, Google Maps)
-- [ ] Deepgram STT integration
-- [ ] Redis session management
-- [ ] Advanced LLM prompting
-- [ ] Event recommendations
-- [ ] User feedback loop
-- [ ] Analytics and metrics
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+2. Create a feature branch (`git checkout -b feature/name`)
+3. Commit changes
+4. Push and open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see LICENSE file for details.
-
-## Support
-
-For questions or issues, please open a GitHub issue or contact the development team.
+MIT

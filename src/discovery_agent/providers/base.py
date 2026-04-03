@@ -29,6 +29,15 @@ class SearchResult:
     published: Optional[str] = None
 
 
+@dataclass
+class ProviderConfig:
+    """Generic provider configuration."""
+
+    api_key: str
+    base_url: str = ""
+    timeout_seconds: int = 15
+
+
 class SearchProvider(Protocol):
     """Provider interface for external search APIs."""
 
