@@ -1,0 +1,7 @@
+[build]
+# Share incremental build cache
+incremental = true
+
+[target.'cfg(target_os = "macos")']
+# Unpacked debug info is faster to generate
+rustflags = ["-C", "split-debuginfo=unpacked"]
