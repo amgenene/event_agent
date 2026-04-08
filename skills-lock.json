@@ -6,6 +6,14 @@
       "sourceType": "github",
       "computedHash": "912205692b6c1db07d6933f0584af27c6582484e5d6fac1c13fec4b6a963a528"
     },
+<<<<<<< HEAD
+=======
+    "clerk-android": {
+      "source": "clerk/skills",
+      "sourceType": "github",
+      "computedHash": "da36f01b8217702a5b699d32deabfd7c2d2e4e6d6c8a46900ad557dfb8d2e460"
+    },
+>>>>>>> 7d81b43 (fix added things)
     "clerk-backend-api": {
       "source": "clerk/skills",
       "sourceType": "github",
@@ -31,6 +39,14 @@
       "sourceType": "github",
       "computedHash": "790a6272ff39129de170a192cc1966bf84b3a4983b55e9e843b8f979aba56208"
     },
+<<<<<<< HEAD
+=======
+    "clerk-swift": {
+      "source": "clerk/skills",
+      "sourceType": "github",
+      "computedHash": "d77fe5bd3d321cda24f7d9376f7d3be49c1da1857694d462baa74be06de85237"
+    },
+>>>>>>> 7d81b43 (fix added things)
     "clerk-testing": {
       "source": "clerk/skills",
       "sourceType": "github",
@@ -44,22 +60,57 @@
     "deploy-to-vercel": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
+<<<<<<< HEAD
       "computedHash": "d2b5bcc7c09fdb649129ffc7dd7b647ec1b155736974b974292675afd588cb39"
+=======
+      "computedHash": "03e0eaaa9bf13ba1e7ffa387f5893de6f324c0868c627001f179395a8feaa7c9"
+>>>>>>> 7d81b43 (fix added things)
     },
     "shadcn": {
       "source": "shadcn-ui/ui",
       "sourceType": "github",
       "computedHash": "507f011a70e8b3ae242bdc0bb5b39fd91a1d4049a0f3c281991ccf84973d591c"
     },
+<<<<<<< HEAD
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
       "computedHash": "1be892a3ea68b74654326ef836a58dd528d99ae0ab8d879764e2519c39068e67"
+=======
+    "vercel-cli-with-tokens": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1e1664e75dcab248050faac99db1aaef1456b7945266215ccbab68ddf85b2b79"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "575757e3e25761c8c562d6e395d29f0b76c98b1273c0bd72d88e6ab1bc9c7d42"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "43ca6c197f8ec13055079da7053232d477068b03ca443f9ac1bc819b95cdd432"
+    },
+    "vercel-react-native-skills": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "41d24eafa7c3d82e270439808f7cfbc4d51aeb2d14f2809a2267c16275784d06"
+    },
+    "vercel-react-view-transitions": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "c8952fc9127fa0564d0cb71dccb4215a5608ac933b5831104f09173a97a46f85"
+>>>>>>> 7d81b43 (fix added things)
     },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
+<<<<<<< HEAD
       "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+=======
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+>>>>>>> 7d81b43 (fix added things)
     }
   }
 }

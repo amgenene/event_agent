@@ -1,0 +1,51 @@
+{
+  "observability": {
+    "enabled": false,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "event-searcher",
+  "compatibility_date": "2026-04-07",
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "env": {
+    "preview": {
+      "vars": {
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_Y2xlcmsuZXZlbnQtc2VhcmNoZXIuY29tJA"
+      }
+    },
+    "production": {
+      "routes": [
+    { "pattern": "event-searcher.com/*", "zone_name": "event-searcher.com" },
+    { "pattern": "www.event-searcher.com/*", "zone_name": "event-searcher.com" }
+  ],
+      "vars": {
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_live_Y2xlcmsuZXZlbnQtc2VhcmNoZXIuY29tJA",
+        "NEXT_PUBLIC_CLERK_SIGN_IN_URL": "/sign-in",
+        "NEXT_PUBLIC_CLERK_SIGN_UP_URL": "/sign-up",
+        "NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL": "/",
+        "NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL": "/"
+      }
+      
+    }
+  }
+  
+}
